@@ -20,17 +20,22 @@ class Sensor:
             for i in range(10):
                 heater_step = self._data[i]
                 time_data = heater_step["Time Since PowerOn"].values
-                filt_data = heater_step["Filtered"].values
+                filt_gas = heater_step["Filtered_Gas"].values
+                filt_temp = heater_step["Filtered_Temperature"].values
+                filt_press = heater_step["Filtered_Pressure"].values
+                filt_rh = heater_step["Filtered_Relative_Humidity"].values
 
                 mask = (time_data >= start) & (time_data <= end)
                 time_cls = time_data[mask]
-                filt_cls = filt_data[mask]
                 heater_data_list.append({
                     "start": time_cls[0],
                     "end": time_cls[-1],
                     "num_samples": len(time_cls),
                     "sample_times": time_cls,
-                    "sample_vals": filt_cls
+                    "sample_vals_gas": filt_gas[mask],
+                    "sample_vals_temp": filt_temp[mask],
+                    "sample_vals_press": filt_press[mask],
+                    "sample_vals_rh": filt_rh[mask]
                 })
 
             cls_data_list.append({
@@ -43,7 +48,7 @@ class Sensor:
 
         return cls_data_list
 
-    def get_interpolated_data(self, force_num_samples: int = None):
+    def get_interpolated_data(self, force_num_samples: int = None, include_types: list[str] = ["gas"]):
         cls_data_list = []
         for raw_cls_data in self._raw_cls_data_list:
             cls = raw_cls_data["class"]
@@ -59,10 +64,12 @@ class Sensor:
                                   for el in heater_data_list])
 
             sample_times = np.linspace(start, end, num_samples)
-            interp_heater_data_list = []
-            for i in range(10):
-                interp_heater_data = self._interp_funcs[i](sample_times)
-                interp_heater_data_list.append(interp_heater_data)
+            interp_data_list = []
+            for include_type in include_types:
+                for i in range(10):
+                    interp_data = self._interp_funcs[i][include_type](
+                        sample_times)
+                    interp_data_list.append(interp_data)
 
             cls_data_list.append({
                 "class": cls,
@@ -70,9 +77,29 @@ class Sensor:
                 "start": start,
                 "end": end,
                 "time_arr": sample_times,
-                "X": np.array(interp_heater_data_list),
+                "X": np.array(interp_data_list),
                 "y": np.array([cls] * num_samples, dtype=np.int32),
                 "targets": np.array([target] * num_samples, dtype=np.float32)
             })
 
         return cls_data_list
+
+
+def main():
+    import pickle
+    with open("lpf_sensor_data.pkl", "rb") as f:
+        sensor_data = pickle.load(f)
+
+    with open("sensor_labels.pkl", "rb") as f:
+        labels = pickle.load(f)
+
+    with open("interpolation_functions.pkl", "rb") as f:
+        interp_funcs = pickle.load(f)
+    s = Sensor(0, 0, sensor_data, labels, interp_funcs)
+    data_list = s.get_interpolated_data(force_num_samples=100, include_types=[
+                                        "gas", "temp", "rh", "press"])
+    print(data_list)
+
+
+if __name__ == "__main__":
+    main()

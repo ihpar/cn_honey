@@ -23,14 +23,16 @@ class Dataset:
 
                 self._sensor_classes[f"mat_{mat}"].append(s)
 
-    def get_sensor_cls(self, mat, sensor, num_samples=None, as_log=False):
+    def get_sensor_cls(self, mat, sensor, num_samples=None, as_log=False, include_types=["gas"]):
         """
         returns X, y, time array, targets array
         """
         s: Sensor = self._sensor_classes[f"mat_{mat}"][sensor]
         interpolated_data = s.get_interpolated_data(
-            force_num_samples=num_samples)
-        X = np.array([[]] * 10)
+            force_num_samples=num_samples,
+            include_types=include_types
+        )
+        X = np.array([[]] * (10 * len(include_types)))
         y = np.array([], dtype=np.int32)
         time_arr = np.array([])
         targets = np.array([])
@@ -48,7 +50,8 @@ class Dataset:
                             as_log=False,
                             as_mean=False,
                             sort_by_class=False,
-                            class_subset=None):
+                            class_subset=None,
+                            include_types=["gas"]):
         """
         returns X, y, time array, targets
         """
@@ -58,16 +61,21 @@ class Dataset:
         s1: Sensor = self._sensor_classes[f"mat_{mat}"][sensor_pair[0]]
         s2: Sensor = self._sensor_classes[f"mat_{mat}"][sensor_pair[1]]
 
-        s1_data = s1.get_interpolated_data(force_num_samples=num_samples)
-        s2_data = s2.get_interpolated_data(force_num_samples=num_samples)
+        s1_data = s1.get_interpolated_data(
+            force_num_samples=num_samples,
+            include_types=include_types)
+        s2_data = s2.get_interpolated_data(
+            force_num_samples=num_samples,
+            include_types=include_types)
+
         if sort_by_class:
             s1_data = sorted(s1_data, key=lambda d: d["class"])
             s2_data = sorted(s2_data, key=lambda d: d["class"])
 
         if as_mean:
-            X = np.array([[]] * 10)
+            X = np.array([[]] * (10 * len(include_types)))
         else:
-            X = np.array([[]] * 20)
+            X = np.array([[]] * (20 * len(include_types)))
 
         y = np.array([], dtype=np.int32)
         time_arr = np.array([])
@@ -128,30 +136,30 @@ class Dataset:
         return X_scr_calibrated
 
 
-def plot_data_pair(X_l, X_r, time_arr, title):
-    data_T_l = X_l.T
-    data_T_r = X_r.T
-    fig = go.Figure()
-
-    for i, data in enumerate(data_T_l):
-        fig.add_trace(go.Scatter(x=time_arr,
-                                 y=data,
-                                 mode="markers",
-                                 name=f"L {i}"))
-    for i, data in enumerate(data_T_r):
-        fig.add_trace(go.Scatter(x=time_arr,
-                                 y=data,
-                                 mode="markers",
-                                 name=f"R {i}"))
-
-    fig.update_layout(title=title, title_x=0.5, width=1000, height=600)
-    fig.update_traces(marker=dict(size=2))
-    fig.show()
-
-
 if __name__ == "__main__":
     import pickle
     import plotly.graph_objects as go
+
+    def plot_data_pair(X_l, X_r, time_arr, title):
+        data_T_l = X_l.T
+        data_T_r = X_r.T
+        fig = go.Figure()
+
+        for i, data in enumerate(data_T_l):
+            fig.add_trace(go.Scatter(x=time_arr,
+                                     y=data,
+                                     mode="markers",
+                                     name=f"L {i}"))
+        for i, data in enumerate(data_T_r):
+            fig.add_trace(go.Scatter(x=time_arr,
+                                     y=data,
+                                     mode="markers",
+                                     name=f"R {i}"))
+
+        fig.update_layout(title=title, title_x=0.5, width=1000, height=600)
+        fig.update_traces(marker=dict(size=2))
+        fig.show()
+
     with open("lpf_sensor_data.pkl", "rb") as f:
         sensor_data = pickle.load(f)
 
@@ -162,15 +170,21 @@ if __name__ == "__main__":
         interp_funcs = pickle.load(f)
 
     dataset = Dataset(sensor_data, labels, interp_funcs)
+    # X, y, time_arr, targets = dataset.get_sensor_cls(0, 0,
+    #                                                  num_samples=100,
+    #                                                  as_log=True,
+    #                                                  include_types=["gas", "temp", "rh", "press"])
     X, y, time_arr, targets = dataset.get_sensor_pair_cls(
         0,
         (2, 3),
         num_samples=100,
         as_log=True,
         as_mean=False,
-        class_subset=[1, 2, 3, 4]
+        class_subset=[1, 2, 3, 4],
+        include_types=["gas", "temp", "rh", "press"]
     )
-    print(X, y)
+    plot_data_pair(X, np.array([]), time_arr, "")
+    # print(X, y)
     # X_src, X_target = X[:, :10], X[:, 10:]
     # X_src_calibrated = dataset.calibrate_data(
     #     X_src, X_target)
